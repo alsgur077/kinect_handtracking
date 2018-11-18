@@ -1,0 +1,51 @@
+﻿<Window x:Class="qwerty_handtracking.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:qwerty_handtracking"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="600" Width="700"
+        Loaded="MainWindow_Loaded"
+        Closed="MainWindow_Closed">
+    <Window.Resources>
+        <Style x:Key="ContainerStyle" TargetType="Grid">
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Width" Value="150"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="Black" Opacity="0.5"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="TitleStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="20"/>
+        </Style>
+        <Style x:Key="StateStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="20"/>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Viewbox>
+            <Grid Width="600" Height="400">
+                <Canvas Name="canvas"/>
+                <Image Name="camera" Opacity="0.7"/>
+                
+            </Grid>
+        </Viewbox>
+        <Grid Style="{StaticResource ContainerStyle}">
+            <StackPanel Margin="20">
+                <StackPanel Margin="0,0,0,20">
+                    <TextBlock Text="오른손 : " Style="{StaticResource TitleStyle}"/>
+                    <TextBlock Name="RightHandState" Text="- " Style="{StaticResource StateStyle}"/>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="왼손 : " Style="{StaticResource TitleStyle}"/>
+                    <TextBlock Name="LeftHandState" Text="- " Style="{StaticResource StateStyle}"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
