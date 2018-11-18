@@ -9,6 +9,7 @@
         Loaded="MainWindow_Loaded"
         Closed="MainWindow_Closed">
     <Window.Resources>
+        
         <Style x:Key="ContainerStyle" TargetType="Grid">
             <Setter Property="HorizontalAlignment" Value="Right"/>
             <Setter Property="Width" Value="150"/>
@@ -30,9 +31,8 @@
     <Grid>
         <Viewbox>
             <Grid Width="600" Height="400">
-                <Canvas Name="canvas"/>
                 <Image Name="camera" Opacity="0.7"/>
-                
+                <Canvas Name="canvas"/>                
             </Grid>
         </Viewbox>
         <Grid Style="{StaticResource ContainerStyle}">

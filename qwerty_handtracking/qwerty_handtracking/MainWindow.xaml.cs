@@ -25,85 +25,40 @@ namespace qwerty_handtracking
     {
         private KinectSensor KinectSensor = null;
 
-        private WriteableBitmap WriteableBitmap = null;
-
         private MultiSourceFrameReader MultiSourceFrameReader = null;
+
+        private WriteableBitmap WriteableBitmap = null;        
 
         private FrameDescription FrameDescription = null;
 
+        private CoordinateMapper coordinateMapper = null;        
+
         private Body[] bodies = null;
-
-        private CoordinateMapper coordinateMapper = null;
-
-        private const double JointThickness = 3;
-
-        private readonly Brush trackedJointBrush = new SolidColorBrush(Color.FromArgb(255, 68, 192, 68));
-
-        private readonly Brush inferredJointBrush = Brushes.Yellow;
-
-        private readonly Pen inferredBonePen = new Pen(Brushes.Gray, 1);
-
-        private List<Tuple<JointType, JointType>> bones;
-
-        private DrawingGroup drawingGroup;
-
-        private DrawingImage imageSource;
-
-        private int displayWidth;
-
-        private int displayHeight;
-
-        private List<Pen> bodyColors = null;
 
         public MainWindow()
         {
-            KinectSensor = KinectSensor.GetDefault();
-            this.coordinateMapper = this.KinectSensor.CoordinateMapper;
-
-            KinectSensor.Open();
-
-            FrameDescription = this.KinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
-
-            WriteableBitmap = new WriteableBitmap(FrameDescription.Width, FrameDescription.Height, 96, 96, PixelFormats.Bgr32, null);
-
-            MultiSourceFrameReader = KinectSensor.OpenMultiSourceFrameReader(FrameSourceTypes.Color | FrameSourceTypes.Depth | FrameSourceTypes.Body);
-
-
-            this.bones = new List<Tuple<JointType, JointType>>();
-
-            this.bones.Add(new Tuple<JointType, JointType>(JointType.ShoulderRight, JointType.ElbowRight));
-            this.bones.Add(new Tuple<JointType, JointType>(JointType.ElbowRight, JointType.WristRight));
-            this.bones.Add(new Tuple<JointType, JointType>(JointType.WristRight, JointType.HandRight));
-            this.bones.Add(new Tuple<JointType, JointType>(JointType.HandRight, JointType.HandTipRight));
-            this.bones.Add(new Tuple<JointType, JointType>(JointType.WristRight, JointType.ThumbRight));
-
-            this.bodyColors = new List<Pen>();
-
-            this.bodyColors.Add(new Pen(Brushes.Red, 6));
-            this.bodyColors.Add(new Pen(Brushes.Orange, 6));
-            this.bodyColors.Add(new Pen(Brushes.Green, 6));
-            this.bodyColors.Add(new Pen(Brushes.Blue, 6));
-            this.bodyColors.Add(new Pen(Brushes.Indigo, 6));
-            this.bodyColors.Add(new Pen(Brushes.Violet, 6));
-
-            this.drawingGroup = new DrawingGroup();
-
-            this.imageSource = new DrawingImage(this.drawingGroup);
-
-            this.DataContext = this;
-
             InitializeComponent();
         }
         
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            
+            KinectSensor = KinectSensor.GetDefault();
+
             if ( KinectSensor != null) {
-                                
-                
 
-                MultiSourceFrameReader.MultiSourceFrameArrived += Reader_MultiSourceFrameArrived;
+                KinectSensor = KinectSensor.GetDefault();
 
+                coordinateMapper = KinectSensor.CoordinateMapper;
+
+                KinectSensor.Open();
+
+                FrameDescription = this.KinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
+
+                WriteableBitmap = new WriteableBitmap(FrameDescription.Width, FrameDescription.Height, 96, 96, PixelFormats.Bgr32, null);
+
+                MultiSourceFrameReader = KinectSensor.OpenMultiSourceFrameReader(FrameSourceTypes.Color | FrameSourceTypes.Depth | FrameSourceTypes.Body);
+
+                MultiSourceFrameReader.MultiSourceFrameArrived += Reader_MultiSourceFrameArrived;                
             }
         }
 
@@ -120,19 +75,11 @@ namespace qwerty_handtracking
             }
         }
      
-        private ImageSource ImageSource
-        {
-            get
-            {
-                return imageSource;
-            }
-        }
-       
         private void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
         {
             var frame = e.FrameReference.AcquireFrame();
 
-            // color 영상 출력 부분
+            #region colorFrame
             using ( ColorFrame colorFrame = frame.ColorFrameReference.AcquireFrame() )
             {
                 if( colorFrame != null )
@@ -155,16 +102,14 @@ namespace qwerty_handtracking
                 }
                 camera.Source = WriteableBitmap;
             }
+            #endregion
 
-            // handtracking
+            #region handTracking
             bool dataReceived = false;
             canvas.Children.Clear();
 
             using (BodyFrame bodyFrame = frame.BodyFrameReference.AcquireFrame())
             {
-              
-
-
                 if (bodyFrame != null)
                 {
                     if (bodies == null)
@@ -177,98 +122,106 @@ namespace qwerty_handtracking
                 }
             }
             if (dataReceived)
-            {
-                using (DrawingContext dc = drawingGroup.Open())
-                {
-                    
-                    int penIndex = 0;
-
-                    foreach (Body body in bodies)
+            {                
+                foreach (Body body in bodies)
+                {                    
+                    if (body.IsTracked)
                     {
-                        Pen drawPen = bodyColors[penIndex++];
-                        if (body.IsTracked)
+                        Dictionary<JointType, Joint> joints = new Dictionary<JointType, Joint>();
+
+                        joints[JointType.ShoulderRight] = body.Joints[JointType.ShoulderRight];
+                        joints[JointType.ElbowRight] = body.Joints[JointType.ElbowRight];
+                        joints[JointType.WristRight] = body.Joints[JointType.WristRight];
+                        joints[JointType.HandRight] = body.Joints[JointType.HandRight];
+                        joints[JointType.ThumbRight] = body.Joints[JointType.ThumbRight];
+                        joints[JointType.HandTipRight] = body.Joints[JointType.HandTipRight];
+                        joints[JointType.ShoulderLeft] = body.Joints[JointType.ShoulderLeft];
+                        joints[JointType.ElbowLeft] = body.Joints[JointType.ElbowLeft];
+                        joints[JointType.WristLeft] = body.Joints[JointType.WristLeft];
+                        joints[JointType.HandLeft] = body.Joints[JointType.HandLeft];
+                        joints[JointType.ThumbLeft] = body.Joints[JointType.ThumbLeft];
+                        joints[JointType.HandTipLeft] = body.Joints[JointType.HandTipLeft];
+
+                        Dictionary<JointType, Point> jointPoints = new Dictionary<JointType, Point>();
+
+                        foreach (JointType jointType in joints.Keys)
                         {
-                            Joint ShoulderRight = body.Joints[JointType.ShoulderRight];
-                            Joint ElbowRight = body.Joints[JointType.ElbowRight];
-                            Joint WristRight = body.Joints[JointType.WristRight];
-                            Joint HandRight = body.Joints[JointType.HandRight];
-                            Joint ThumbRight = body.Joints[JointType.ThumbRight];
-                            Joint HandTipRight = body.Joints[JointType.HandTipRight];
+                            CameraSpacePoint position = joints[jointType].Position;
 
-                            Dictionary<JointType, Joint> joints = new Dictionary<JointType, Joint>();
-                            joints[JointType.ShoulderRight] = ShoulderRight;
-                            joints[JointType.ElbowRight] = ElbowRight;
-                            joints[JointType.WristRight] = WristRight;
-                            joints[JointType.HandRight] = HandRight;
-                            joints[JointType.ThumbRight] = ThumbRight;
-                            joints[JointType.HandTipRight] = HandTipRight;
+                            DepthSpacePoint depthSpacePoint = coordinateMapper.MapCameraPointToDepthSpace(position);
 
-                            Dictionary<JointType, Point> jointPoints = new Dictionary<JointType, Point>();
-
-                            foreach (JointType jointType in joints.Keys)
-                            {                                
-                                CameraSpacePoint position = joints[jointType].Position;
-                                
-                                DepthSpacePoint depthSpacePoint = coordinateMapper.MapCameraPointToDepthSpace(position);
-                                
-                                jointPoints[jointType] = new Point(depthSpacePoint.X, depthSpacePoint.Y);
-                            }
-                            DrawBody(joints, jointPoints, dc, drawPen);
+                            jointPoints[jointType] = new Point(depthSpacePoint.X, depthSpacePoint.Y);
                         }
+                        DrawBody(joints, jointPoints, canvas);
                     }
                 }
-            }           
+            }
+            #endregion
         }
 
-        private void DrawBody(Dictionary<JointType,Joint> joints,Dictionary<JointType,Point> jointPoints, DrawingContext drawingContext, Pen drawingPen)
-        {
-            foreach(var bone in bones)
-            {
-             
-                DrawBone(joints, jointPoints, bone.Item1, bone.Item2, drawingContext, drawingPen);
-            }
-
+        private void DrawBody(Dictionary<JointType,Joint> joints,Dictionary<JointType,Point> jointPoints, Canvas canvas)
+        {     
             foreach(JointType jointType in joints.Keys)
-            {
-                Brush drawBrush = null;
-
+            {                
                 TrackingState trackingState = joints[jointType].TrackingState;
 
-                if(trackingState == TrackingState.Tracked)
-                {
-                    drawBrush = trackedJointBrush;
-                }
-                else if(trackingState == TrackingState.Inferred)
-                {
-                    drawBrush = inferredJointBrush;
-                }
+                if (trackingState == TrackingState.NotTracked)
+                    return;
 
-                if(drawBrush != null)
+                Point point = jointPoints[jointType];
+                Ellipse ellipse = new Ellipse
                 {
-                    Debug.WriteLine("draw");
-                    drawingContext.DrawEllipse(drawBrush, null, jointPoints[jointType], JointThickness, JointThickness);
-                }
+                    Width = 10,
+                    Height = 10,
+                    Fill = new SolidColorBrush(Colors.LightBlue)
+                };
+                Canvas.SetLeft(ellipse, point.X - ellipse.Width / 2);
+                Canvas.SetTop(ellipse, point.Y - ellipse.Height / 2);
+
+                canvas.Children.Add(ellipse);
+               
+                DrawBone(joints, jointPoints, canvas);
             }
         }
 
-        private void DrawBone(Dictionary<JointType, Joint> joints, Dictionary<JointType, Point> jointPoints, JointType jointType0, JointType jointType1, DrawingContext drawingContext, Pen drawingPen)
+        private void DrawBone(Dictionary<JointType, Joint> joints, Dictionary<JointType,Point> jointPoints, Canvas canvas)
+        {
+            DrawLine(joints, jointPoints, JointType.ShoulderRight, JointType.ElbowRight, canvas);
+            DrawLine(joints, jointPoints, JointType.ElbowRight, JointType.WristRight, canvas);
+            DrawLine(joints, jointPoints, JointType.WristRight, JointType.HandRight, canvas);
+            DrawLine(joints, jointPoints, JointType.HandRight, JointType.HandTipRight, canvas);
+            DrawLine(joints, jointPoints, JointType.WristRight, JointType.ThumbRight, canvas);
+
+            DrawLine(joints, jointPoints, JointType.ShoulderLeft, JointType.ElbowLeft, canvas);
+            DrawLine(joints, jointPoints, JointType.ElbowLeft, JointType.WristLeft, canvas);
+            DrawLine(joints, jointPoints, JointType.WristLeft, JointType.HandLeft, canvas);
+            DrawLine(joints, jointPoints, JointType.HandLeft, JointType.HandTipLeft, canvas);
+            DrawLine(joints, jointPoints, JointType.WristLeft, JointType.ThumbLeft, canvas);
+        }
+
+        private void DrawLine(Dictionary<JointType, Joint> joints, Dictionary<JointType, Point> jointPoints, JointType jointType0, JointType jointType1, Canvas canvas)
         {
             Joint joint0 = joints[jointType0];
             Joint joint1 = joints[jointType1];
 
-            if((joint0.TrackingState == TrackingState.NotTracked) || (joint1.TrackingState == TrackingState.NotTracked))
+            if ((joint0.TrackingState == TrackingState.NotTracked) || (joint1.TrackingState == TrackingState.NotTracked))
             {
                 return;
             }
-
-            Pen drawPen = inferredBonePen;
-
             if ((joint0.TrackingState == TrackingState.Tracked) && (joint1.TrackingState == TrackingState.Tracked))
             {
-                drawPen = drawingPen;
-            }
+                Line line = new Line
+                {
+                    X1 = jointPoints[jointType0].X,
+                    Y1 = jointPoints[jointType0].Y,
+                    X2 = jointPoints[jointType1].X,
+                    Y2 = jointPoints[jointType1].Y,
+                    StrokeThickness = 5,
+                    Stroke = new SolidColorBrush(Colors.LightBlue)
+                };
 
-            drawingContext.DrawLine(drawPen, jointPoints[jointType0], jointPoints[jointType1]);
+                canvas.Children.Add(line);
+            }            
         }        
     }
 
