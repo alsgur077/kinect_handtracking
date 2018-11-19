@@ -146,13 +146,14 @@ namespace qwerty_handtracking
 
                         foreach (JointType jointType in joints.Keys)
                         {
-                            CameraSpacePoint position = joints[jointType].Position;
-
-                            DepthSpacePoint depthSpacePoint = coordinateMapper.MapCameraPointToDepthSpace(position);
+                           // ColorSpacePoint depthSpacePoint = coordinateMapper.MapCameraPointToColorSpace(joints[jointType].Position);
+                            
+                            Point depthSpacePoint = Scale(joints[jointType], coordinateMapper);
 
                             jointPoints[jointType] = new Point(depthSpacePoint.X, depthSpacePoint.Y);
                         }
                         DrawBody(joints, jointPoints, canvas);
+                        handState(body);
                     }
                 }
             }
@@ -222,7 +223,69 @@ namespace qwerty_handtracking
 
                 canvas.Children.Add(line);
             }            
-        }        
+        }
+        private Point Scale(Joint joint, CoordinateMapper mapper)
+        {
+            Point point = new Point();
+
+            ColorSpacePoint colorPoint = mapper.MapCameraPointToColorSpace(joint.Position);
+            point.X = float.IsInfinity(colorPoint.X) ? 0.0 : colorPoint.X;
+            point.Y = float.IsInfinity(colorPoint.Y) ? 0.0 : colorPoint.Y;
+                        
+            return point;
+        }
+
+        private void handState(Body body)
+        {
+            string rightHandState = null;
+            string leftHandState = null;
+
+            switch (body.HandRightState)
+            {
+                case HandState.Open:
+                    rightHandState = "빠";
+                    break;
+                case HandState.Closed:
+                    rightHandState = "묵";
+                    break;
+                case HandState.Lasso:
+                    rightHandState = "찌";
+                    break;
+                case HandState.Unknown:
+                    rightHandState = "Unknown...";
+                    break;
+                case HandState.NotTracked:
+                    rightHandState = "Not tracked";
+                    break;
+                default:
+                    break;
+            }
+
+            switch (body.HandLeftState)
+            {
+                case HandState.Open:
+                    leftHandState = "빠";
+                    break;
+                case HandState.Closed:
+                    leftHandState = "묵";
+                    break;
+                case HandState.Lasso:
+                    leftHandState = "찌";
+                    break;
+                case HandState.Unknown:
+                    leftHandState = "Unknown...";
+                    break;
+                case HandState.NotTracked:
+                    leftHandState = "Not tracked";
+                    break;
+                default:
+                    break;
+            }
+
+
+            RightHandState.Text = rightHandState;
+            LeftHandState.Text  = leftHandState;
+        }
     }
 
 }
