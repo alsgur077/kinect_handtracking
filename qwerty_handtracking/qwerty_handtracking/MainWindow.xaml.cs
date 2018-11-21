@@ -15,6 +15,8 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Microsoft.Kinect;
+using LightBuzz.Vitruvius.FingerTracking;
+
 
 namespace qwerty_handtracking
 {
@@ -27,6 +29,8 @@ namespace qwerty_handtracking
 
         private MultiSourceFrameReader MultiSourceFrameReader = null;
 
+        private HandsController handsController = null;
+
         private WriteableBitmap WriteableBitmap = null;        
 
         private FrameDescription FrameDescription = null;
@@ -34,7 +38,7 @@ namespace qwerty_handtracking
         private CoordinateMapper coordinateMapper = null;        
 
         private Body[] bodies = null;
-
+                
         public MainWindow()
         {
             InitializeComponent();
@@ -51,14 +55,18 @@ namespace qwerty_handtracking
                 coordinateMapper = KinectSensor.CoordinateMapper;
 
                 KinectSensor.Open();
-
+                
                 FrameDescription = this.KinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
 
                 WriteableBitmap = new WriteableBitmap(FrameDescription.Width, FrameDescription.Height, 96, 96, PixelFormats.Bgr32, null);
 
                 MultiSourceFrameReader = KinectSensor.OpenMultiSourceFrameReader(FrameSourceTypes.Color | FrameSourceTypes.Depth | FrameSourceTypes.Body);
 
-                MultiSourceFrameReader.MultiSourceFrameArrived += Reader_MultiSourceFrameArrived;                
+                MultiSourceFrameReader.MultiSourceFrameArrived += Reader_MultiSourceFrameArrived;
+
+                handsController = new HandsController();
+
+                handsController.HandsDetected += HandsController_HandsDetected;
             }
         }
 
@@ -73,7 +81,7 @@ namespace qwerty_handtracking
             {
                 KinectSensor.Close();
             }
-        }
+        }   
      
         private void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
         {
@@ -122,9 +130,11 @@ namespace qwerty_handtracking
                 }
             }
             if (dataReceived)
-            {                
-                foreach (Body body in bodies)
-                {                    
+            {
+                //body = bodies.Where(b => b.IsTracked).FirstOrDefault();
+                
+                foreach(Body body in bodies)
+                {
                     if (body.IsTracked)
                     {
                         Dictionary<JointType, Joint> joints = new Dictionary<JointType, Joint>();
@@ -146,14 +156,34 @@ namespace qwerty_handtracking
 
                         foreach (JointType jointType in joints.Keys)
                         {
-                           // ColorSpacePoint depthSpacePoint = coordinateMapper.MapCameraPointToColorSpace(joints[jointType].Position);
                             
                             Point depthSpacePoint = Scale(joints[jointType], coordinateMapper);
 
                             jointPoints[jointType] = new Point(depthSpacePoint.X, depthSpacePoint.Y);
                         }
+
                         DrawBody(joints, jointPoints, canvas);
+
                         handState(body);
+                        
+                    }                    
+                    
+                }
+                
+            }
+            #endregion
+
+            #region fingerTracking
+            using (DepthFrame depthFrame = frame.DepthFrameReference.AcquireFrame())
+            {
+                if(depthFrame != null)
+                {
+                    using(KinectBuffer kinectBuffer = depthFrame.LockImageBuffer())
+                    {
+                        foreach(Body body in bodies)
+                        {
+                            handsController.Update(kinectBuffer.UnderlyingBuffer, body);
+                        }                        
                     }
                 }
             }
@@ -170,53 +200,44 @@ namespace qwerty_handtracking
                     return;
 
                 Point point = jointPoints[jointType];
-                Ellipse ellipse = new Ellipse
-                {
-                    Width = 10,
-                    Height = 10,
-                    Fill = new SolidColorBrush(Colors.LightBlue)
-                };
-                Canvas.SetLeft(ellipse, point.X - ellipse.Width / 2);
-                Canvas.SetTop(ellipse, point.Y - ellipse.Height / 2);
 
-                canvas.Children.Add(ellipse);
-               
+                DrawEllipse(point, Brushes.LightBlue, 4);
+                              
                 DrawBone(joints, jointPoints, canvas);
             }
         }
 
         private void DrawBone(Dictionary<JointType, Joint> joints, Dictionary<JointType,Point> jointPoints, Canvas canvas)
         {
-            DrawLine(joints, jointPoints, JointType.ShoulderRight, JointType.ElbowRight, canvas);
-            DrawLine(joints, jointPoints, JointType.ElbowRight, JointType.WristRight, canvas);
-            DrawLine(joints, jointPoints, JointType.WristRight, JointType.HandRight, canvas);
-            DrawLine(joints, jointPoints, JointType.HandRight, JointType.HandTipRight, canvas);
-            DrawLine(joints, jointPoints, JointType.WristRight, JointType.ThumbRight, canvas);
+            DrawLine(jointPoints[JointType.ShoulderRight], jointPoints[JointType.ElbowRight], canvas);
+            DrawLine(jointPoints[JointType.ElbowRight], jointPoints[JointType.WristRight], canvas);
+            DrawLine(jointPoints[JointType.WristRight], jointPoints[JointType.HandRight], canvas);
+           // DrawLine(jointPoints[JointType.HandRight], jointPoints[JointType.HandTipRight], canvas);
+            //DrawLine(jointPoints[JointType.WristRight], jointPoints[JointType.ThumbRight], canvas);
 
-            DrawLine(joints, jointPoints, JointType.ShoulderLeft, JointType.ElbowLeft, canvas);
-            DrawLine(joints, jointPoints, JointType.ElbowLeft, JointType.WristLeft, canvas);
-            DrawLine(joints, jointPoints, JointType.WristLeft, JointType.HandLeft, canvas);
-            DrawLine(joints, jointPoints, JointType.HandLeft, JointType.HandTipLeft, canvas);
-            DrawLine(joints, jointPoints, JointType.WristLeft, JointType.ThumbLeft, canvas);
+            DrawLine(jointPoints[JointType.ShoulderLeft], jointPoints[JointType.ElbowLeft], canvas);
+            DrawLine(jointPoints[JointType.ElbowLeft], jointPoints[JointType.WristLeft], canvas);
+            DrawLine(jointPoints[JointType.WristLeft], jointPoints[JointType.HandLeft], canvas);
+            //DrawLine(jointPoints[JointType.HandLeft], jointPoints[JointType.HandTipLeft], canvas);
+           // DrawLine(jointPoints[JointType.WristLeft], jointPoints[JointType.ThumbLeft], canvas);
         }
 
-        private void DrawLine(Dictionary<JointType, Joint> joints, Dictionary<JointType, Point> jointPoints, JointType jointType0, JointType jointType1, Canvas canvas)
+        private void DrawLine(Point point1, Point point2, Canvas canvas)
         {
-            Joint joint0 = joints[jointType0];
-            Joint joint1 = joints[jointType1];
+            
 
-            if ((joint0.TrackingState == TrackingState.NotTracked) || (joint1.TrackingState == TrackingState.NotTracked))
+            if (double.IsInfinity(point1.X) || double.IsInfinity(point1.Y) || double.IsInfinity(point2.X) || double.IsInfinity(point2.Y))
             {
                 return;
             }
-            if ((joint0.TrackingState == TrackingState.Tracked) && (joint1.TrackingState == TrackingState.Tracked))
+            if (!double.IsInfinity(point1.X) && !double.IsInfinity(point1.Y) && !double.IsInfinity(point2.X) && !double.IsInfinity(point2.Y))
             {
                 Line line = new Line
                 {
-                    X1 = jointPoints[jointType0].X,
-                    Y1 = jointPoints[jointType0].Y,
-                    X2 = jointPoints[jointType1].X,
-                    Y2 = jointPoints[jointType1].Y,
+                    X1 = point1.X,
+                    Y1 = point1.Y,
+                    X2 = point2.X,
+                    Y2 = point2.Y,
                     StrokeThickness = 5,
                     Stroke = new SolidColorBrush(Colors.LightBlue)
                 };
@@ -229,6 +250,8 @@ namespace qwerty_handtracking
             Point point = new Point();
 
             ColorSpacePoint colorPoint = mapper.MapCameraPointToColorSpace(joint.Position);
+            DepthSpacePoint depthSpacePoint = mapper.MapCameraPointToDepthSpace(joint.Position);
+            
             point.X = float.IsInfinity(colorPoint.X) ? 0.0 : colorPoint.X;
             point.Y = float.IsInfinity(colorPoint.Y) ? 0.0 : colorPoint.Y;
                         
@@ -285,6 +308,57 @@ namespace qwerty_handtracking
 
             RightHandState.Text = rightHandState;
             LeftHandState.Text  = leftHandState;
+        }
+
+        private void HandsController_HandsDetected(object sender, HandCollection e)
+        {
+            // Display the results!
+            foreach(Body body in bodies)
+            {
+                if(body.TrackingId == e.TrackingId)
+                {
+                    if (e.HandLeft != null)
+                    {
+                        // Draw fingers.
+                        foreach (var finger in e.HandLeft.Fingers)
+                        {
+                            ColorSpacePoint center = coordinateMapper.MapCameraPointToColorSpace(body.Joints[JointType.HandLeft].Position);
+                            Point CenterPosition = new Point(center.X, center.Y);
+                            Point point = new Point(finger.ColorPoint.X, finger.ColorPoint.Y);
+                            DrawEllipse(point, Brushes.LightBlue, 4.0);
+                            DrawLine(point, CenterPosition, canvas);
+                        }
+                    }
+
+                    if (e.HandRight != null)
+                    {
+                        // Draw fingers.
+                        foreach (var finger in e.HandRight.Fingers)
+                        {
+                            ColorSpacePoint center = coordinateMapper.MapCameraPointToColorSpace(body.Joints[JointType.HandRight].Position);
+                            Point CenterPosition = new Point(center.X, center.Y);
+                            Point point = new Point(finger.ColorPoint.X, finger.ColorPoint.Y);
+                            DrawEllipse(point, Brushes.LightBlue, 4.0);
+                            DrawLine(point, CenterPosition, canvas);
+                        }
+                    }
+                }                
+            }            
+        }
+
+        private void DrawEllipse(Point point, Brush brush, double radius)
+        {
+            Ellipse ellipse = new Ellipse
+            {
+                Width = radius,
+                Height = radius,
+                Fill = brush
+            };
+
+            canvas.Children.Add(ellipse);
+
+            Canvas.SetLeft(ellipse, point.X - radius / 2.0);
+            Canvas.SetTop(ellipse, point.Y - radius / 2.0);
         }
     }
 
