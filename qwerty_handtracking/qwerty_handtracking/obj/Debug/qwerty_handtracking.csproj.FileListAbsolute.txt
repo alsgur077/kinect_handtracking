@@ -37,3 +37,4 @@ C:\Users\Minuk\source\repos\kinect_handtracking\qwerty_handtracking\qwerty_handt
 C:\Users\Minuk\source\repos\kinect_handtracking\qwerty_handtracking\qwerty_handtracking\bin\Debug\LightBuzz.Vitruvius.FingerTracking.dll
 C:\Users\Minuk\source\repos\kinect_handtracking\qwerty_handtracking\qwerty_handtracking\bin\Debug\LightBuzz.Vitruvius.FingerTracking.pdb
 C:\Users\Minuk\source\repos\kinect_handtracking\qwerty_handtracking\qwerty_handtracking\bin\Debug\LightBuzz.Vitruvius.FingerTracking.xml
+C:\Users\Minuk\source\repos\kinect_handtracking\qwerty_handtracking\qwerty_handtracking\obj\Debug\qwerty_handtracking.csproj.ResolveComReference.cache

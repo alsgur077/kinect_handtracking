@@ -13,10 +13,12 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
+using System.Runtime.InteropServices;
+using Excel = Microsoft.Office.Interop.Excel;
 using System.Windows.Shapes;
 using Microsoft.Kinect;
 using LightBuzz.Vitruvius.FingerTracking;
-
+using System.Threading;
 
 namespace qwerty_handtracking
 {
@@ -38,6 +40,21 @@ namespace qwerty_handtracking
         private CoordinateMapper coordinateMapper = null;        
 
         private Body[] bodies = null;
+
+        private Excel.Application application = null;
+
+        private Excel.Workbook workbook = null;
+
+        private Excel.Worksheet worksheet = null;
+
+        private Excel.Range range = null;
+
+        private object[,] data = null;
+
+        private static int position_idx = 0, ExcelRow = 1, ExcelCol = 1, SD_idx = 0;
+
+        private double[] SD = new double[10000];
+               
                 
         public MainWindow()
         {
@@ -51,11 +68,20 @@ namespace qwerty_handtracking
             if ( KinectSensor != null) {
 
                 KinectSensor = KinectSensor.GetDefault();
-
+                
                 coordinateMapper = KinectSensor.CoordinateMapper;
 
                 KinectSensor.Open();
-                
+
+                application = new Excel.Application();
+                /*=======================*/
+                //workbook = application.Workbooks.Add();
+                workbook = application.Workbooks.Open(@"C:\Temp\hello4.xls");
+                worksheet = workbook.Worksheets.get_Item(1) as Excel.Worksheet;
+
+                Excel.Range range = worksheet.UsedRange;
+                data = range.Value;
+                /*=======================*/
                 FrameDescription = this.KinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
 
                 WriteableBitmap = new WriteableBitmap(FrameDescription.Width, FrameDescription.Height, 96, 96, PixelFormats.Bgr32, null);
@@ -67,12 +93,25 @@ namespace qwerty_handtracking
                 handsController = new HandsController();
 
                 handsController.HandsDetected += HandsController_HandsDetected;
+                
             }
         }
 
         private void MainWindow_Closed(object sender, EventArgs e)
         {
-            if( MultiSourceFrameReader!= null )
+            
+            workbook.SaveAs(@"c:\Temp\hello4.xls");
+
+            workbook.Close();
+
+            application.Quit();
+
+            worksheet = null; 
+            workbook = null;
+            application = null;
+
+
+            if ( MultiSourceFrameReader!= null )
             {
                 MultiSourceFrameReader.Dispose();
             }
@@ -153,14 +192,20 @@ namespace qwerty_handtracking
                         joints[JointType.HandTipLeft] = body.Joints[JointType.HandTipLeft];
 
                         Dictionary<JointType, Point> jointPoints = new Dictionary<JointType, Point>();
-
+                                                
                         foreach (JointType jointType in joints.Keys)
                         {
                             
                             Point depthSpacePoint = Scale(joints[jointType], coordinateMapper);
 
-                            jointPoints[jointType] = new Point(depthSpacePoint.X, depthSpacePoint.Y);
+                            jointPoints[jointType] = new Point(depthSpacePoint.X, depthSpacePoint.Y);                                                   
+
                         }
+
+                        if (position_idx == 1)
+                            StartRecog(jointPoints);
+
+                        DrawRec(canvas, jointPoints[JointType.HandLeft]);
 
                         DrawBody(joints, jointPoints, canvas);
 
@@ -190,6 +235,48 @@ namespace qwerty_handtracking
             #endregion
         }
 
+        private async void DrawRec(Canvas canvas, Point point)
+        {
+            int prePosition_x = 300;
+            int prePosition_y = 300;
+            int postPosition_x = 600;
+            int postPosition_y = 600;
+            
+            Rectangle rectangle = new Rectangle
+            {
+                Width = 200,
+                Height = 200,
+                Stroke = Brushes.Red               
+            };
+
+            if (prePosition_x + 50 < point.X && point.X < prePosition_x + 150 && prePosition_y + 50 < point.Y && point.Y < prePosition_y + 150 && position_idx == 0)
+                position_idx = 1;
+
+            else if (postPosition_x + 50 < point.X && point.X < postPosition_x + 150 && postPosition_y + 50 < point.Y && point.Y < postPosition_y + 150 && position_idx == 1)
+            {
+                position_idx = 0;
+               
+                var task = Task.Run(() => Regularization());
+                await task;
+
+                ExcelRow++;
+                SD_idx = 0;
+            }
+                
+
+
+            if (position_idx == 0)
+                rectangle.Margin = new Thickness(prePosition_x, prePosition_y, 0, 0);
+            else if (position_idx == 1)
+                rectangle.Margin = new Thickness(postPosition_x, postPosition_y, 0, 0);
+            else
+                canvas.Children.Remove(rectangle);
+
+
+            canvas.Children.Add(rectangle);
+
+            
+        }
         private void DrawBody(Dictionary<JointType,Joint> joints,Dictionary<JointType,Point> jointPoints, Canvas canvas)
         {     
             foreach(JointType jointType in joints.Keys)
@@ -212,14 +299,14 @@ namespace qwerty_handtracking
             DrawLine(jointPoints[JointType.ShoulderRight], jointPoints[JointType.ElbowRight], canvas);
             DrawLine(jointPoints[JointType.ElbowRight], jointPoints[JointType.WristRight], canvas);
             DrawLine(jointPoints[JointType.WristRight], jointPoints[JointType.HandRight], canvas);
-           // DrawLine(jointPoints[JointType.HandRight], jointPoints[JointType.HandTipRight], canvas);
-            //DrawLine(jointPoints[JointType.WristRight], jointPoints[JointType.ThumbRight], canvas);
-
+            DrawLine(jointPoints[JointType.HandRight], jointPoints[JointType.HandTipRight], canvas);
+            DrawLine(jointPoints[JointType.WristRight], jointPoints[JointType.ThumbRight], canvas);
+            
             DrawLine(jointPoints[JointType.ShoulderLeft], jointPoints[JointType.ElbowLeft], canvas);
             DrawLine(jointPoints[JointType.ElbowLeft], jointPoints[JointType.WristLeft], canvas);
             DrawLine(jointPoints[JointType.WristLeft], jointPoints[JointType.HandLeft], canvas);
-            //DrawLine(jointPoints[JointType.HandLeft], jointPoints[JointType.HandTipLeft], canvas);
-           // DrawLine(jointPoints[JointType.WristLeft], jointPoints[JointType.ThumbLeft], canvas);
+            DrawLine(jointPoints[JointType.HandLeft], jointPoints[JointType.HandTipLeft], canvas);
+            DrawLine(jointPoints[JointType.WristLeft], jointPoints[JointType.ThumbLeft], canvas);
         }
 
         private void DrawLine(Point point1, Point point2, Canvas canvas)
@@ -245,6 +332,7 @@ namespace qwerty_handtracking
                 canvas.Children.Add(line);
             }            
         }
+
         private Point Scale(Joint joint, CoordinateMapper mapper)
         {
             Point point = new Point();
@@ -310,6 +398,50 @@ namespace qwerty_handtracking
             LeftHandState.Text  = leftHandState;
         }
 
+        private void StartRecog(Dictionary<JointType, Point> jointPoints)
+        {            
+            SD[SD_idx] = jointPoints[JointType.HandLeft].Y;
+            SD_idx++;
+        }
+
+        private void Regularization()
+        {
+            double SN;
+            double LN;
+            /*=======================*/
+            /* for (int i=1 ; i<= 80 ; i++)
+             {
+                 SN = SD_idx * i / 80;
+                 int dec = (int)SN;
+
+                 if (i == 80)
+                     LN = SD[dec];
+                 else
+                     LN = SD[dec] * (1 - (SN - dec)) + SD[dec + 1] * (SN - dec);
+
+                 worksheet.Cells[ExcelRow, i] = LN;
+             }*/
+            var sum = 0;
+            
+            for (int i = 1; i <= 80; i++)
+            {
+                SN = SD_idx * i / 80;
+                int dec = (int)SN;
+
+                if (i == 80)
+                    LN = SD[dec];
+                else
+                    LN = SD[dec] * (1 - (SN - dec)) + SD[dec + 1] * (SN - dec);
+
+                if (-50 < double.Parse(data[2, i].ToString()) - LN && double.Parse(data[2, i].ToString()) - LN < 50)
+                    sum++;
+                    
+            }
+                       
+            Debug.WriteLine(sum);
+            /*=======================*/
+        }
+
         private void HandsController_HandsDetected(object sender, HandCollection e)
         {
             // Display the results!
@@ -322,11 +454,11 @@ namespace qwerty_handtracking
                         // Draw fingers.
                         foreach (var finger in e.HandLeft.Fingers)
                         {
-                            ColorSpacePoint center = coordinateMapper.MapCameraPointToColorSpace(body.Joints[JointType.HandLeft].Position);
+                            ColorSpacePoint center = coordinateMapper.MapCameraPointToColorSpace(body.Joints[JointType.WristLeft].Position);
                             Point CenterPosition = new Point(center.X, center.Y);
                             Point point = new Point(finger.ColorPoint.X, finger.ColorPoint.Y);
-                            DrawEllipse(point, Brushes.LightBlue, 4.0);
-                            DrawLine(point, CenterPosition, canvas);
+                            DrawEllipse(point, Brushes.Yellow, 20.0);
+                            
                         }
                     }
 
@@ -335,11 +467,11 @@ namespace qwerty_handtracking
                         // Draw fingers.
                         foreach (var finger in e.HandRight.Fingers)
                         {
-                            ColorSpacePoint center = coordinateMapper.MapCameraPointToColorSpace(body.Joints[JointType.HandRight].Position);
+                            ColorSpacePoint center = coordinateMapper.MapCameraPointToColorSpace(body.Joints[JointType.WristRight].Position);
                             Point CenterPosition = new Point(center.X, center.Y);
                             Point point = new Point(finger.ColorPoint.X, finger.ColorPoint.Y);
-                            DrawEllipse(point, Brushes.LightBlue, 4.0);
-                            DrawLine(point, CenterPosition, canvas);
+                            DrawEllipse(point, Brushes.Yellow, 20.0);
+                            
                         }
                     }
                 }                
