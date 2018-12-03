@@ -51,7 +51,7 @@ namespace qwerty_handtracking
 
         private object[,] data = null;
 
-        private static int position_idx = 0, ExcelRow = 1, ExcelCol = 1, SD_idx = 0;
+        private static int position_idx = 0, ExcelRow = 1, SL=0, SD_idx = 0, MatchingRate = 0;
 
         private double[] SD = new double[10000];
                
@@ -82,6 +82,7 @@ namespace qwerty_handtracking
                 Excel.Range range = worksheet.UsedRange;
                 data = range.Value;
                 /*=======================*/
+                
                 FrameDescription = this.KinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
 
                 WriteableBitmap = new WriteableBitmap(FrameDescription.Width, FrameDescription.Height, 96, 96, PixelFormats.Bgr32, null);
@@ -100,7 +101,7 @@ namespace qwerty_handtracking
         private void MainWindow_Closed(object sender, EventArgs e)
         {
             
-            workbook.SaveAs(@"c:\Temp\hello4.xls");
+            //workbook.SaveAs(@"c:\Temp\hello4.xls");
 
             workbook.Close();
 
@@ -209,7 +210,7 @@ namespace qwerty_handtracking
 
                         DrawBody(joints, jointPoints, canvas);
 
-                        handState(body);
+                        //handState(body);
                         
                     }                    
                     
@@ -237,17 +238,27 @@ namespace qwerty_handtracking
 
         private async void DrawRec(Canvas canvas, Point point)
         {
-            int prePosition_x = 300;
-            int prePosition_y = 300;
-            int postPosition_x = 600;
+            int prePosition_x = 700;
+            int prePosition_y = 600;
+            int postPosition_x = 300;
             int postPosition_y = 600;
             
-            Rectangle rectangle = new Rectangle
+
+            Rectangle rec1 = new Rectangle
             {
                 Width = 200,
                 Height = 200,
                 Stroke = Brushes.Red               
             };
+
+            Rectangle rec2 = new Rectangle
+            {
+                Width = 200,
+                Height = 200,
+                Stroke = Brushes.Red
+            };
+
+
 
             if (prePosition_x + 50 < point.X && point.X < prePosition_x + 150 && prePosition_y + 50 < point.Y && point.Y < prePosition_y + 150 && position_idx == 0)
                 position_idx = 1;
@@ -259,23 +270,36 @@ namespace qwerty_handtracking
                 var task = Task.Run(() => Regularization());
                 await task;
 
+                SignLanguage.Text = data[SL, 81].ToString();
+                CorrectRate.Text = (MatchingRate * 100 / 80).ToString() + "%";
+                MatchingRate = 0;   
                 ExcelRow++;
                 SD_idx = 0;
-            }
-                
+            }                
 
 
             if (position_idx == 0)
-                rectangle.Margin = new Thickness(prePosition_x, prePosition_y, 0, 0);
+            {
+                rec1.Margin = new Thickness(prePosition_x,       prePosition_y, 0, 0);
+                rec2.Margin = new Thickness(prePosition_x + 300, prePosition_y, 0, 0);
+            }
+                
             else if (position_idx == 1)
-                rectangle.Margin = new Thickness(postPosition_x, postPosition_y, 0, 0);
+            {
+                rec1.Margin = new Thickness(postPosition_x,       postPosition_y, 0, 0);
+                rec2.Margin = new Thickness(postPosition_x + 900, postPosition_y, 0, 0);
+            }
+                
             else
-                canvas.Children.Remove(rectangle);
+            {
+                canvas.Children.Remove(rec1);
+                canvas.Children.Remove(rec2);
+            }
+
+            canvas.Children.Add(rec1);
+            canvas.Children.Add(rec2);
 
 
-            canvas.Children.Add(rectangle);
-
-            
         }
         private void DrawBody(Dictionary<JointType,Joint> joints,Dictionary<JointType,Point> jointPoints, Canvas canvas)
         {     
@@ -345,7 +369,7 @@ namespace qwerty_handtracking
                         
             return point;
         }
-
+/*
         private void handState(Body body)
         {
             string rightHandState = null;
@@ -397,7 +421,7 @@ namespace qwerty_handtracking
             RightHandState.Text = rightHandState;
             LeftHandState.Text  = leftHandState;
         }
-
+        */
         private void StartRecog(Dictionary<JointType, Point> jointPoints)
         {            
             SD[SD_idx] = jointPoints[JointType.HandLeft].Y;
@@ -409,7 +433,8 @@ namespace qwerty_handtracking
             double SN;
             double LN;
             /*=======================*/
-            /* for (int i=1 ; i<= 80 ; i++)
+            /*
+             for (int i=1 ; i<= 80 ; i++)
              {
                  SN = SD_idx * i / 80;
                  int dec = (int)SN;
@@ -420,9 +445,12 @@ namespace qwerty_handtracking
                      LN = SD[dec] * (1 - (SN - dec)) + SD[dec + 1] * (SN - dec);
 
                  worksheet.Cells[ExcelRow, i] = LN;
-             }*/
-            var sum = 0;
-            
+             }
+            */
+            var ExcelSize = data.GetLength(0);
+            int[] sum = new int[ExcelSize];
+
+
             for (int i = 1; i <= 80; i++)
             {
                 SN = SD_idx * i / 80;
@@ -433,12 +461,29 @@ namespace qwerty_handtracking
                 else
                     LN = SD[dec] * (1 - (SN - dec)) + SD[dec + 1] * (SN - dec);
 
-                if (-50 < double.Parse(data[2, i].ToString()) - LN && double.Parse(data[2, i].ToString()) - LN < 50)
-                    sum++;
-                    
+                for (int j = 1; j <= ExcelSize; j++)
+                {
+                    if (-50 < double.Parse(data[j, i].ToString()) - LN && double.Parse(data[j, i].ToString()) - LN < 50)
+                        sum[j - 1]++;
+                }
+
+
             }
-                       
-            Debug.WriteLine(sum);
+            for (int i = 0; i < ExcelSize; i++)
+            {
+                if (MatchingRate < sum[i])
+                {
+                    MatchingRate = sum[i];
+                    SL = i + 1;
+                }
+
+            }
+
+            Debug.WriteLine(MatchingRate);
+            Debug.WriteLine(SL);
+
+
+            
             /*=======================*/
         }
 

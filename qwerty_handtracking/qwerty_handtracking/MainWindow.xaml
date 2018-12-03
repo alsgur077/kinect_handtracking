@@ -37,13 +37,14 @@
         </Viewbox>
         <Grid Style="{StaticResource ContainerStyle}">
             <StackPanel Margin="20">
-                <StackPanel Margin="0,0,0,70">
-                    <TextBlock Text="오른손 : " Style="{StaticResource TitleStyle}"/>
-                    <TextBlock Name="RightHandState" Text="- " Style="{StaticResource StateStyle}"/>
+                
+                <StackPanel Margin="0,0,0,0">
+                    <TextBlock Text="수화" Style="{StaticResource TitleStyle}"/>
+                    <TextBlock Name="SignLanguage" Text="- " Style="{StaticResource StateStyle}"/>
                 </StackPanel>
-                <StackPanel>
-                    <TextBlock Text="왼손 : " Style="{StaticResource TitleStyle}"/>
-                    <TextBlock Name="LeftHandState" Text="- " Style="{StaticResource StateStyle}"/>
+                <StackPanel Margin="0,70,0,0">
+                    <TextBlock Text="인식률" Style="{StaticResource TitleStyle}"/>
+                    <TextBlock Name="CorrectRate" Text="- " Style="{StaticResource StateStyle}"/>
                 </StackPanel>
             </StackPanel>
         </Grid>
