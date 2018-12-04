@@ -35,8 +35,11 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="InTheHand.Net.Personal">
+      <HintPath>..\..\InTheHand.Net.Personal.dll</HintPath>
+    </Reference>
     <Reference Include="LightBuzz.Vitruvius.FingerTracking">
-      <HintPath>..\..\..\qwerty_handtracking\LightBuzz.Vitruvius.FingerTracking\bin\Debug\LightBuzz.Vitruvius.FingerTracking.dll</HintPath>
+      <HintPath>..\..\LightBuzz.Vitruvius.FingerTracking\bin\Debug\LightBuzz.Vitruvius.FingerTracking.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Kinect, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>

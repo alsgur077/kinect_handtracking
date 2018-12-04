@@ -19,6 +19,10 @@ using System.Windows.Shapes;
 using Microsoft.Kinect;
 using LightBuzz.Vitruvius.FingerTracking;
 using System.Threading;
+using InTheHand.Net.Sockets;                                                                                                                                                                                                                                                
+using InTheHand.Net.Bluetooth;
+using System.IO;
+using System.Net.Sockets;
 
 namespace qwerty_handtracking
 {
@@ -54,6 +58,14 @@ namespace qwerty_handtracking
         private static int position_idx = 0, ExcelRow = 1, SL=0, SD_idx = 0, MatchingRate = 0;
 
         private double[] SD = new double[10000];
+
+        private Thread AcceptAndListeningThread;
+
+        private Boolean isConnected = false;
+
+        private BluetoothClient BluetoothClient;
+
+        private BluetoothListener BluetoothListener;
                
                 
         public MainWindow()
@@ -96,21 +108,50 @@ namespace qwerty_handtracking
                 handsController.HandsDetected += HandsController_HandsDetected;
                 
             }
+
+            if(BluetoothRadio.IsSupported)
+            {
+                AcceptAndListeningThread = new Thread(AcceptAndListen);
+
+                AcceptAndListeningThread.Start();
+            }
+            else
+            {
+                Debug.WriteLine("Bluetooth not Supported!");
+            }     
+            
+    }
+
+        private void AcceptAndListen()
+        {
+            if (!isConnected)
+            {
+                try
+                {
+                    BluetoothListener = new BluetoothListener(BluetoothService.RFCommProtocol);
+
+                    Debug.WriteLine("Listener created with TCP Protocol service " + BluetoothService.RFCommProtocol);
+                    Debug.WriteLine("Starting Listener….");
+                    BluetoothListener.Start();
+                    Debug.WriteLine("Listener Started!");
+                    Debug.WriteLine("Accepting incoming connection….");
+                    BluetoothClient = BluetoothListener.AcceptBluetoothClient();
+                    isConnected = BluetoothClient.Connected;
+                    Debug.WriteLine("A Bluetooth Device Connected!");
+                }
+                catch (Exception e)
+                {
+                    Debug.WriteLine("There is an error while accepting connection");
+                    Debug.WriteLine(e.Message);
+                    Debug.WriteLine("Retrying….");
+                }
+            }
         }
 
         private void MainWindow_Closed(object sender, EventArgs e)
         {
             
-            //workbook.SaveAs(@"c:\Temp\hello4.xls");
-
-            workbook.Close();
-
-            application.Quit();
-
-            worksheet = null; 
-            workbook = null;
-            application = null;
-
+            //workbook.SaveAs(@"c:\Temp\hello4.xls");                                     
 
             if ( MultiSourceFrameReader!= null )
             {
@@ -121,6 +162,24 @@ namespace qwerty_handtracking
             {
                 KinectSensor.Close();
             }
+
+            try
+            {
+                AcceptAndListeningThread.Abort();
+                BluetoothClient.GetStream().Close();
+                BluetoothClient.Dispose();
+                BluetoothListener.Stop();
+                workbook.Close();
+                application.Quit();
+                worksheet = null;
+                workbook = null;
+                application = null;
+            }
+            catch(Exception)
+            {
+
+            }
+            
         }   
      
         private void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
@@ -204,13 +263,12 @@ namespace qwerty_handtracking
                         }
 
                         if (position_idx == 1)
-                            StartRecog(jointPoints);
+                            RecognizeStart(jointPoints);
 
                         DrawRec(canvas, jointPoints[JointType.HandLeft]);
 
                         DrawBody(joints, jointPoints, canvas);
-
-                        //handState(body);
+                                                
                         
                     }                    
                     
@@ -236,7 +294,46 @@ namespace qwerty_handtracking
             #endregion
         }
 
-        private async void DrawRec(Canvas canvas, Point point)
+        public Boolean sendMessage(String msg)
+        {
+            Debug.WriteLine("Send Message1");
+            try
+            {
+                Debug.WriteLine("Send Message2");
+                if (!msg.Equals(""))
+                {
+                    Debug.WriteLine("Send Message3");
+                    UTF8Encoding encoder = new UTF8Encoding();
+                    NetworkStream ns = BluetoothClient.GetStream();
+                    StreamWriter sw = new StreamWriter(ns);
+                    sw.WriteLine(msg, System.Text.Encoding.Default);
+                    sw.Flush();                   
+                    Debug.WriteLine("Send Message4");
+
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("There is an error while sending message");                
+                try
+                {
+                    isConnected = BluetoothClient.Connected;
+                    BluetoothClient.GetStream().Close();
+                    BluetoothClient.Dispose();
+                    BluetoothListener.Server.Dispose();
+                    BluetoothListener.Stop();
+                }
+                catch (Exception)
+                {
+                }
+
+                return false;
+            }
+
+            return true;
+        }        
+
+        private void DrawRec(Canvas canvas, Point point)
         {
             int prePosition_x = 700;
             int prePosition_y = 600;
@@ -257,24 +354,20 @@ namespace qwerty_handtracking
                 Height = 200,
                 Stroke = Brushes.Red
             };
+            
 
-
-
-            if (prePosition_x + 50 < point.X && point.X < prePosition_x + 150 && prePosition_y + 50 < point.Y && point.Y < prePosition_y + 150 && position_idx == 0)
+            if (prePosition_x + 50 < point.X && point.X < prePosition_x + 150 && 
+                prePosition_y + 50 < point.Y && point.Y < prePosition_y + 150 && position_idx == 0)
+            {
                 position_idx = 1;
+            }
+                
 
-            else if (postPosition_x + 50 < point.X && point.X < postPosition_x + 150 && postPosition_y + 50 < point.Y && point.Y < postPosition_y + 150 && position_idx == 1)
+            else if (postPosition_x + 50 < point.X && point.X < postPosition_x + 150 &&
+                     postPosition_y + 50 < point.Y && point.Y < postPosition_y + 150 && position_idx == 1)
             {
                 position_idx = 0;
-               
-                var task = Task.Run(() => Regularization());
-                await task;
-
-                SignLanguage.Text = data[SL, 81].ToString();
-                CorrectRate.Text = (MatchingRate * 100 / 80).ToString() + "%";
-                MatchingRate = 0;   
-                ExcelRow++;
-                SD_idx = 0;
+                CalculateResult();
             }                
 
 
@@ -301,6 +394,7 @@ namespace qwerty_handtracking
 
 
         }
+
         private void DrawBody(Dictionary<JointType,Joint> joints,Dictionary<JointType,Point> jointPoints, Canvas canvas)
         {     
             foreach(JointType jointType in joints.Keys)
@@ -334,8 +428,7 @@ namespace qwerty_handtracking
         }
 
         private void DrawLine(Point point1, Point point2, Canvas canvas)
-        {
-            
+        {            
 
             if (double.IsInfinity(point1.X) || double.IsInfinity(point1.Y) || double.IsInfinity(point2.X) || double.IsInfinity(point2.Y))
             {
@@ -357,6 +450,21 @@ namespace qwerty_handtracking
             }            
         }
 
+        private void DrawEllipse(Point point, Brush brush, double radius)
+        {
+            Ellipse ellipse = new Ellipse
+            {
+                Width = radius,
+                Height = radius,
+                Fill = brush
+            };
+
+            canvas.Children.Add(ellipse);
+
+            Canvas.SetLeft(ellipse, point.X - radius / 2.0);
+            Canvas.SetTop(ellipse, point.Y - radius / 2.0);
+        }
+
         private Point Scale(Joint joint, CoordinateMapper mapper)
         {
             Point point = new Point();
@@ -369,63 +477,24 @@ namespace qwerty_handtracking
                         
             return point;
         }
-/*
-        private void handState(Body body)
-        {
-            string rightHandState = null;
-            string leftHandState = null;
 
-            switch (body.HandRightState)
-            {
-                case HandState.Open:
-                    rightHandState = "빠";
-                    break;
-                case HandState.Closed:
-                    rightHandState = "묵";
-                    break;
-                case HandState.Lasso:
-                    rightHandState = "찌";
-                    break;
-                case HandState.Unknown:
-                    rightHandState = "Unknown...";
-                    break;
-                case HandState.NotTracked:
-                    rightHandState = "Not tracked";
-                    break;
-                default:
-                    break;
-            }
-
-            switch (body.HandLeftState)
-            {
-                case HandState.Open:
-                    leftHandState = "빠";
-                    break;
-                case HandState.Closed:
-                    leftHandState = "묵";
-                    break;
-                case HandState.Lasso:
-                    leftHandState = "찌";
-                    break;
-                case HandState.Unknown:
-                    leftHandState = "Unknown...";
-                    break;
-                case HandState.NotTracked:
-                    leftHandState = "Not tracked";
-                    break;
-                default:
-                    break;
-            }
-
-
-            RightHandState.Text = rightHandState;
-            LeftHandState.Text  = leftHandState;
-        }
-        */
-        private void StartRecog(Dictionary<JointType, Point> jointPoints)
+        private void RecognizeStart(Dictionary<JointType, Point> jointPoints)
         {            
             SD[SD_idx] = jointPoints[JointType.HandLeft].Y;
             SD_idx++;
+        }
+
+        private async void CalculateResult()
+        {
+            var task = Task.Run(() => Regularization());
+            await task;
+
+            SignLanguage.Text = data[SL, 81].ToString();
+            sendMessage(data[SL, 81].ToString());
+            CorrectRate.Text = (MatchingRate * 100 / 80).ToString() + "%";
+            MatchingRate = 0;
+            ExcelRow++;
+            SD_idx = 0;
         }
 
         private void Regularization()
@@ -481,9 +550,7 @@ namespace qwerty_handtracking
 
             Debug.WriteLine(MatchingRate);
             Debug.WriteLine(SL);
-
-
-            
+      
             /*=======================*/
         }
 
@@ -523,20 +590,5 @@ namespace qwerty_handtracking
             }            
         }
 
-        private void DrawEllipse(Point point, Brush brush, double radius)
-        {
-            Ellipse ellipse = new Ellipse
-            {
-                Width = radius,
-                Height = radius,
-                Fill = brush
-            };
-
-            canvas.Children.Add(ellipse);
-
-            Canvas.SetLeft(ellipse, point.X - radius / 2.0);
-            Canvas.SetTop(ellipse, point.Y - radius / 2.0);
-        }
     }
-
 }
