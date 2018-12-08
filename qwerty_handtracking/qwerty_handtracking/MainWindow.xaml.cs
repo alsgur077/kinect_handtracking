@@ -23,7 +23,9 @@ using InTheHand.Net.Sockets;
 using InTheHand.Net.Bluetooth;
 using System.IO;
 using System.Net.Sockets;
-
+/// <summary>
+// 수화 인식용 코드
+/// </summary>
 namespace qwerty_handtracking
 {
     /// <summary>
@@ -57,7 +59,9 @@ namespace qwerty_handtracking
 
         private static int position_idx = 0, ExcelRow = 1, SL=0, SD_idx = 0, MatchingRate = 0;
 
-        private double[] SD = new double[10000];
+        private double[] HandLeft_Y = new double[1000];
+
+        private double[] HandRight_Y = new double[1000];
 
         private Thread AcceptAndListeningThread;
 
@@ -66,6 +70,8 @@ namespace qwerty_handtracking
         private BluetoothClient BluetoothClient;
 
         private BluetoothListener BluetoothListener;
+
+        private Point sholderPoint;
                
                 
         public MainWindow()
@@ -87,8 +93,8 @@ namespace qwerty_handtracking
 
                 application = new Excel.Application();
                 /*=======================*/
-                //workbook = application.Workbooks.Add();
-                workbook = application.Workbooks.Open(@"C:\Temp\hello4.xls");
+                
+                workbook = application.Workbooks.Open(@"C:\Temp\leftHand.xls");
                 worksheet = workbook.Worksheets.get_Item(1) as Excel.Worksheet;
 
                 Excel.Range range = worksheet.UsedRange;
@@ -108,7 +114,7 @@ namespace qwerty_handtracking
                 handsController.HandsDetected += HandsController_HandsDetected;
                 
             }
-
+            /*
             if(BluetoothRadio.IsSupported)
             {
                 AcceptAndListeningThread = new Thread(AcceptAndListen);
@@ -118,40 +124,100 @@ namespace qwerty_handtracking
             else
             {
                 Debug.WriteLine("Bluetooth not Supported!");
-            }     
+            } 
+            */
             
     }
 
         private void AcceptAndListen()
         {
-            if (!isConnected)
+            while (true)
             {
-                try
+                if (!isConnected)
                 {
-                    BluetoothListener = new BluetoothListener(BluetoothService.RFCommProtocol);
+                    try
+                    {
+                        BluetoothListener = new BluetoothListener(BluetoothService.RFCommProtocol);
 
-                    Debug.WriteLine("Listener created with TCP Protocol service " + BluetoothService.RFCommProtocol);
-                    Debug.WriteLine("Starting Listener….");
-                    BluetoothListener.Start();
-                    Debug.WriteLine("Listener Started!");
-                    Debug.WriteLine("Accepting incoming connection….");
-                    BluetoothClient = BluetoothListener.AcceptBluetoothClient();
-                    isConnected = BluetoothClient.Connected;
-                    Debug.WriteLine("A Bluetooth Device Connected!");
+                        Debug.WriteLine("Listener created with TCP Protocol service " + BluetoothService.RFCommProtocol);
+                        Debug.WriteLine("Starting Listener….");
+                        BluetoothListener.Start();
+                        Debug.WriteLine("Listener Started!");
+                        Debug.WriteLine("Accepting incoming connection….");
+                        BluetoothClient = BluetoothListener.AcceptBluetoothClient();
+                        isConnected = BluetoothClient.Connected;
+                        Debug.WriteLine("A Bluetooth Device Connected!");
+
+
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.WriteLine("There is an error while accepting connection");
+                        Debug.WriteLine(e.Message);
+                        Debug.WriteLine("Retrying….");
+                    }
                 }
-                catch (Exception e)
+                else
                 {
-                    Debug.WriteLine("There is an error while accepting connection");
-                    Debug.WriteLine(e.Message);
-                    Debug.WriteLine("Retrying….");
+                    try
+                    {
+                       Debug.WriteLine("Listening….");
+                        NetworkStream stream = BluetoothClient.GetStream();
+
+                        Byte[] bytes = new Byte[512];
+
+                        String retrievedMsg = "";
+
+                        stream.Read(bytes, 0, 512);
+
+                        stream.Flush();
+
+                        for (int i = 0; i < bytes.Length; i++)
+                        {
+                            retrievedMsg += Convert.ToChar(bytes[i]);
+
+                        }
+                        Debug.WriteLine(retrievedMsg);
+
+                        if (retrievedMsg.Contains("finish"))
+                        {
+                            Debug.WriteLine(BluetoothClient.Connected);
+                            BluetoothClient.GetStream().Close();
+                            BluetoothClient.Dispose();
+                            BluetoothListener.Stop();
+                            isConnected = false;
+
+                            continue;
+                        }
+
+
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("There is an error while listening connection");
+                        Debug.WriteLine(ex.Message);
+                        isConnected = BluetoothClient.Connected;
+                    }
                 }
-            }
+            }             
+
+
         }
 
         private void MainWindow_Closed(object sender, EventArgs e)
         {
-            
-            //workbook.SaveAs(@"c:\Temp\hello4.xls");                                     
+           /*             
+            AcceptAndListeningThread.Abort();
+            BluetoothClient.GetStream().Close();
+            BluetoothClient.Dispose();
+            BluetoothListener.Stop();
+            */
+            workbook.Close();
+            application.Quit();
+            worksheet = null;
+            workbook = null;
+            application = null;
+         
 
             if ( MultiSourceFrameReader!= null )
             {
@@ -162,30 +228,14 @@ namespace qwerty_handtracking
             {
                 KinectSensor.Close();
             }
-
-            try
-            {
-                AcceptAndListeningThread.Abort();
-                BluetoothClient.GetStream().Close();
-                BluetoothClient.Dispose();
-                BluetoothListener.Stop();
-                workbook.Close();
-                application.Quit();
-                worksheet = null;
-                workbook = null;
-                application = null;
-            }
-            catch(Exception)
-            {
-
-            }
+           
             
         }   
      
         private void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
         {
             var frame = e.FrameReference.AcquireFrame();
-
+            
             #region colorFrame
             using ( ColorFrame colorFrame = frame.ColorFrameReference.AcquireFrame() )
             {
@@ -256,16 +306,16 @@ namespace qwerty_handtracking
                         foreach (JointType jointType in joints.Keys)
                         {
                             
-                            Point depthSpacePoint = Scale(joints[jointType], coordinateMapper);
+                            Point colorSpacePoint = Scale(joints[jointType], coordinateMapper);
 
-                            jointPoints[jointType] = new Point(depthSpacePoint.X, depthSpacePoint.Y);                                                   
+                            jointPoints[jointType] = new Point(colorSpacePoint.X, colorSpacePoint.Y);                                                   
 
                         }
 
                         if (position_idx == 1)
                             RecognizeStart(jointPoints);
 
-                        DrawRec(canvas, jointPoints[JointType.HandLeft]);
+                        DrawRec(canvas, jointPoints[JointType.HandLeft], jointPoints[JointType.ShoulderLeft]);
 
                         DrawBody(joints, jointPoints, canvas);
                                                 
@@ -295,24 +345,19 @@ namespace qwerty_handtracking
         }
 
         public Boolean sendMessage(String msg)
-        {
-            Debug.WriteLine("Send Message1");
+        {            
             try
-            {
-                Debug.WriteLine("Send Message2");
+            {                
                 if (!msg.Equals(""))
-                {
-                    Debug.WriteLine("Send Message3");
+                {                    
                     UTF8Encoding encoder = new UTF8Encoding();
                     NetworkStream ns = BluetoothClient.GetStream();
                     StreamWriter sw = new StreamWriter(ns);
                     sw.WriteLine(msg, System.Text.Encoding.Default);
-                    sw.Flush();                   
-                    Debug.WriteLine("Send Message4");
-
+                    sw.Flush();                                       
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 Debug.WriteLine("There is an error while sending message");                
                 try
@@ -333,7 +378,7 @@ namespace qwerty_handtracking
             return true;
         }        
 
-        private void DrawRec(Canvas canvas, Point point)
+        private void DrawRec(Canvas canvas, Point point, Point sPoint)
         {
             int prePosition_x = 700;
             int prePosition_y = 600;
@@ -360,6 +405,8 @@ namespace qwerty_handtracking
                 prePosition_y + 50 < point.Y && point.Y < prePosition_y + 150 && position_idx == 0)
             {
                 position_idx = 1;
+                
+                sholderPoint = sPoint;
             }
                 
 
@@ -480,8 +527,11 @@ namespace qwerty_handtracking
 
         private void RecognizeStart(Dictionary<JointType, Point> jointPoints)
         {            
-            SD[SD_idx] = jointPoints[JointType.HandLeft].Y;
+            HandLeft_Y[SD_idx] = jointPoints[JointType.HandLeft].Y;
+            HandRight_Y[SD_idx] = jointPoints[JointType.HandRight].Y;
             SD_idx++;
+            SignLanguage.Text = "- ";
+            CorrectRate.Text = "- ";
         }
 
         private async void CalculateResult()
@@ -489,9 +539,9 @@ namespace qwerty_handtracking
             var task = Task.Run(() => Regularization());
             await task;
 
-            SignLanguage.Text = data[SL, 81].ToString();
-            sendMessage(data[SL, 81].ToString());
-            CorrectRate.Text = (MatchingRate * 100 / 80).ToString() + "%";
+            SignLanguage.Text = "- " + data[SL, 162].ToString();
+            sendMessage(data[SL, 162].ToString());
+            CorrectRate.Text = "- " + (MatchingRate * 100 / 160).ToString() + "%";
             MatchingRate = 0;
             ExcelRow++;
             SD_idx = 0;
@@ -500,58 +550,61 @@ namespace qwerty_handtracking
         private void Regularization()
         {
             double SN;
-            double LN;
-            /*=======================*/
-            /*
-             for (int i=1 ; i<= 80 ; i++)
-             {
-                 SN = SD_idx * i / 80;
-                 int dec = (int)SN;
-
-                 if (i == 80)
-                     LN = SD[dec];
-                 else
-                     LN = SD[dec] * (1 - (SN - dec)) + SD[dec + 1] * (SN - dec);
-
-                 worksheet.Cells[ExcelRow, i] = LN;
-             }
-            */
+            double rHL;
+            double rHR;
+            double HeightRegularize;
             var ExcelSize = data.GetLength(0);
+
+            
             int[] sum = new int[ExcelSize];
+            
 
-
-            for (int i = 1; i <= 80; i++)
+            for (int i = 2; i <= 81; i++)
             {
                 SN = SD_idx * i / 80;
                 int dec = (int)SN;
 
                 if (i == 80)
-                    LN = SD[dec];
+                {
+                    rHL = HandLeft_Y[dec];
+                    rHR = HandRight_Y[dec];
+                }
+
+
                 else
-                    LN = SD[dec] * (1 - (SN - dec)) + SD[dec + 1] * (SN - dec);
+                {
+                    rHL = HandLeft_Y[dec] * (1 - (SN - dec)) + HandLeft_Y[dec + 1] * (SN - dec);
+                    rHR = HandRight_Y[dec] * (1 - (SN - dec)) + HandRight_Y[dec + 1] * (SN - dec); 
+                }
+                    
 
                 for (int j = 1; j <= ExcelSize; j++)
                 {
-                    if (-50 < double.Parse(data[j, i].ToString()) - LN && double.Parse(data[j, i].ToString()) - LN < 50)
+                    HeightRegularize = double.Parse(data[j, 1].ToString()) - sholderPoint.Y;
+                    
+                    double leftGap  = double.Parse(data[j, i].ToString()) - HeightRegularize - rHL;
+                    double rightGap = double.Parse(data[j, i+80].ToString()) - HeightRegularize - rHR;
+
+                    if (-50 < leftGap && leftGap < 50)
+                        sum[j - 1]++;
+
+                    if(-50 < rightGap && rightGap < 50)
                         sum[j - 1]++;
                 }
-
+                
 
             }
             for (int i = 0; i < ExcelSize; i++)
             {
                 if (MatchingRate < sum[i])
                 {
-                    MatchingRate = sum[i];
+                    MatchingRate = sum[i];                    
+                    
                     SL = i + 1;
                 }
-
-            }
-
-            Debug.WriteLine(MatchingRate);
-            Debug.WriteLine(SL);
+                
+            }            
       
-            /*=======================*/
         }
 
         private void HandsController_HandsDetected(object sender, HandCollection e)

@@ -12,7 +12,9 @@
         
         <Style x:Key="ContainerStyle" TargetType="Grid">
             <Setter Property="HorizontalAlignment" Value="Right"/>
-            <Setter Property="Width" Value="250"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Width" Value="400"/>
+            <Setter Property="Height" Value="300"/>
             <Setter Property="Background">
                 <Setter.Value>
                     <SolidColorBrush Color="Black" Opacity="0.5"/>
@@ -38,12 +40,12 @@
         <Grid Style="{StaticResource ContainerStyle}">
             <StackPanel Margin="20">
                 
-                <StackPanel Margin="0,0,0,0">
-                    <TextBlock Text="수화" Style="{StaticResource TitleStyle}"/>
+                <StackPanel>
+                    <TextBlock Text="수화" Style="{StaticResource TitleStyle}" Margin="0,0,0,10"/>
                     <TextBlock Name="SignLanguage" Text="- " Style="{StaticResource StateStyle}"/>
                 </StackPanel>
-                <StackPanel Margin="0,70,0,0">
-                    <TextBlock Text="인식률" Style="{StaticResource TitleStyle}"/>
+                <StackPanel Margin="0,50,0,0">
+                    <TextBlock Text="인식률" Style="{StaticResource TitleStyle}" Margin="0,0,0,10"/>
                     <TextBlock Name="CorrectRate" Text="- " Style="{StaticResource StateStyle}"/>
                 </StackPanel>
             </StackPanel>
